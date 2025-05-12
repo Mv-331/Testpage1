@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Buffer</title>
+
+
+	<style>
+    html,
+    body,
+    #viewDiv {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    </style>
+	
+	<link rel="stylesheet" href="https://js.arcgis.com/4.24/esri/themes/light/main.css">
+	
+ 	<script src="https://js.arcgis.com/4.24/"></script>
+	
+	<script> 
+	
+	var url1="https://services-ap1.arcgis.com/iA7fZQOnjY9D67Zx/arcgis/rest/services/OSM_AS_Amenities/FeatureServer/0";
+	//var url1="ttps://livingatlas.esri.in/server/rest/services/OSM/POW/MapServer/0";
+	
+	require([
+	  "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/FeatureLayer",
+	  "esri/Graphic",
+	  "esri/rest/query",
+	  "esri/Color",
+	  "esri/symbols/Symbol",
+	  "esri/layers/GraphicsLayer",
+	  "esri/widgets/Sketch",
+	  "esri/geometry/geometryEngine",
+	  "esri/widgets/Sketch/SketchViewModel"
+      ], function (
+	  Map,
+      MapView,
+      FeatureLayer,
+	  Graphic,
+	  query,
+	  Color,
+	  Symbol,
+	  GraphicsLayer,
+	  Sketch,
+	  geometryEngine,
+	  SketchViewModel)
+	  
+		{
+		
+		const graphicsLayer = new GraphicsLayer();
+		const fL = new FeatureLayer("https://services-ap1.arcgis.com/iA7fZQOnjY9D67Zx/arcgis/rest/services/OSM_AS_Amenities/FeatureServer/0");
+		
+		let map = new Map({
+        	basemap: "topo-vector",
+			layers: [graphicsLayer]			
+       		});
+
+		let view = new MapView({
+         	map: map,
+          	center: [78.13 , 8.8], 
+          	zoom: 10, 
+          	container: "viewDiv" 
+        	});
+			
+        const sketch = new Sketch({
+           layer: graphicsLayer,
+           view: view
+			});
+		
+		let PolySymbol = {
+			type: "simple-fill",  // autocasts as new SimpleFillSymbol()
+			color: [0, 20, 200, 0.2],
+			outline: {  // autocasts as new SimpleLineSymbol()
+			color: [255,0,0],
+			width: 2
+			}
+			};
+			
+        view.ui.add(sketch, "top-right");
+
+		const polygonSymbol = {
+  type: "simple-fill", // autocasts as new SimpleFillSymbol()
+  color: "#F2BC94",
+  outline: {
+    // autocasts as new SimpleLineSymbol()
+    color: "#722620",
+    width: 3
+  }
+};
+
+const sketchviewModel = new SketchViewModel({
+  view: view,
+  layer: graphicsLayer,
+  polygonSymbol: polygonSymbol,
+});
+
+const textKeySymbol = {
+  type: "text", // autocasts as new TextSymbol()
+  color: "#7A003C",
+  text: "\ue656", // esri-icon-key
+  font: {
+    // autocasts as new Font()
+    size: 20,
+    family: "CalciteWebCoreIcons"
+  }
+};
+
+const sketchViewModel = new SketchViewModel({
+  view: view,
+  layer: graphicsLayer,
+  pointSymbol: textKeySymbol
+});
+		  
+		function selectFeatures(response){
+     
+		view.graphics.removeAll();
+		
+		//Buffer creation
+		const ptBuff=geometryEngine.geodesicBuffer(response,10,"miles");
+		let polygraphic= new Graphic({
+		geometry: ptBuff,
+		symbol: PolySymbol})
+		view.graphics.add(polygraphic);
+		 
+		//Query to filtering points inside buffer
+		let query = fL.createQuery();
+		query.where= "1=1";
+		query.outFields= ["*"];
+		query.geometry=ptBuff;
+		query.returnGeometry = true;
+		query.spatialRelationship= "intersects";
+		
+		fL.queryFeatures(query) .then(function(results){
+		//query.executeQueryPBF(url1, { where: "1=1", geometry: ptBuff, returnGeometry:true, spatialRelationship : "contains"}).then(function(results){
+		//console.log(results)
+		for (i of results.features){
+		let polypoint= new Graphic({
+		geometry: i['geometry'],
+		//symbol: PointSymbol
+		symbol: i['layer']['renderer']['_valueInfoMap'][i['attributes']['amenity']].symbol
+		})
+		view.graphics.add(polypoint);
+		}
+		})
+		}
+		
+		//event handler of sketch
+		sketch.on("create", function(event) {
+        if (event.state === "complete") {
+		graphicsLayer.remove(event.graphic);
+        selectFeatures(event.graphic.geometry);
+        }
+        });
+		});
+			
+	</script>
+
+   </head>
+   <body>
+    	<div id="viewDiv"></div>
+		
+   </body>
+</html>
